@@ -17,6 +17,13 @@ from utils.anova_utils import (
 	tukey,
 	validar_dca,
 )
+from utils.diagnostico_utils import (
+	grafico_qq,
+	grafico_residuos_vs_ajustados,
+	prueba_levene,
+	prueba_shapiro,
+	residuos_y_ajustados,
+)
 
 
 RUTA_EJEMPLO = Path("data/dca_secadores.csv")
@@ -125,8 +132,8 @@ fila_tratamientos = anova.loc[anova["Fuente"] == "Tratamientos"].iloc[0]
 fila_error = anova.loc[anova["Fuente"] == "Error"].iloc[0]
 p_valor = float(fila_tratamientos["p-valor"])
 
-tab_datos, tab_anova, tab_comparaciones, tab_graficos = st.tabs(
-	["Datos", "ANOVA", "Comparaciones", "Gráficos"]
+tab_datos, tab_anova, tab_comparaciones, tab_graficos, tab_supuestos = st.tabs(
+	["Datos", "ANOVA", "Comparaciones", "Gráficos", "Supuestos"]
 )
 
 with tab_datos:
@@ -226,3 +233,51 @@ with tab_graficos:
 		labels={columna_tratamiento: "Tratamiento", "media": "Media"},
 	)
 	st.plotly_chart(grafico_medias, width="stretch")
+
+with tab_supuestos:
+	st.subheader("Diagnóstico de supuestos")
+	# Shapiro-Wilk evalúa la normalidad de residuos y Levene revisa igualdad de varianzas.
+	residuos, _ = residuos_y_ajustados(modelo)
+	shapiro_estadistico, shapiro_p, shapiro_conclusion = prueba_shapiro(residuos, alfa)
+	levene_estadistico, levene_p, levene_conclusion = prueba_levene(
+		df,
+		columna_tratamiento,
+		columna_respuesta,
+		alfa,
+	)
+	resultados_supuestos = pd.DataFrame(
+		[
+			{
+				"Prueba": "Shapiro-Wilk",
+				"Estadístico": shapiro_estadistico,
+				"p-valor": shapiro_p,
+				"Conclusión": shapiro_conclusion,
+			},
+			{
+				"Prueba": "Levene (mediana)",
+				"Estadístico": levene_estadistico,
+				"p-valor": levene_p,
+				"Conclusión": levene_conclusion,
+			},
+		]
+	)
+	st.dataframe(
+		resultados_supuestos.style.format(
+			{"Estadístico": "{:.4f}", "p-valor": "{:.4f}"}
+		),
+		width="stretch",
+		hide_index=True,
+	)
+
+	st.markdown("**Residuos frente a valores ajustados**")
+	st.plotly_chart(grafico_residuos_vs_ajustados(modelo), width="stretch")
+	st.markdown("**Gráfico Q-Q normal de los residuos**")
+	st.plotly_chart(grafico_qq(residuos), width="stretch")
+
+	st.markdown(
+		"**Supuestos revisados:** Shapiro-Wilk evalúa si los residuos son compatibles "
+		"con una distribución normal. Levene evalúa si la variabilidad de la respuesta "
+		"es semejante entre tratamientos. La independencia no se prueba con estas "
+		"pruebas: se sustenta en la asignación aleatoria de las unidades experimentales "
+		"y en evitar interferencia entre ellas."
+	)
